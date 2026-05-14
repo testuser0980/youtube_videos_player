@@ -4,15 +4,26 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="YT Player"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:name="io.flutter.app.FlutterApplication">
         <activity
-            android:name=".MainActivity"
+            android:name="com.imran.ytplayer.MainActivity"
             android:exported="true"
-            android:theme="@style/LaunchTheme">
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|screenSize|smallestWidthScreen|screenLayout|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <meta-data
+                android:name="flutter_embedding"
+                android:value="2" />
         </activity>
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
     </application>
 </manifest>
