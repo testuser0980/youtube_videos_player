@@ -6,7 +6,6 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- Video Player -->
     <androidx.media3.ui.PlayerView
         android:id="@+id/player_view"
         android:layout_width="match_parent"
@@ -17,7 +16,6 @@
         app:show_timeout="3000"
         app:controller_layout_id="@layout/custom_player_controls" />
 
-    <!-- Video Info Section -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -56,7 +54,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:text="•"
+                    android:text="\u2022"
                     android:textColor="#AAAAAA"
                     android:textSize="13sp" />
 
@@ -186,7 +184,6 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- Divider -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
@@ -233,23 +230,21 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_subscribe"
+                    style="@style/RedButton"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
                     android:text="Subscribe"
                     android:textSize="12sp"
                     android:textColor="#000000"
-                    app:backgroundTint="#FF0000"
                     app:cornerRadius="18dp" />
             </LinearLayout>
 
-            <!-- Divider -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:layout_marginTop="12dp"
                 android:background="#333333" />
 
-            <!-- Description -->
             <TextView
                 android:id="@+id/video_description"
                 android:layout_width="match_parent"
@@ -259,14 +254,12 @@
                 android:textSize="13sp"
                 android:lineSpacingMultiplier="1.3" />
 
-            <!-- Divider -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:layout_marginTop="12dp"
                 android:background="#333333" />
 
-            <!-- Up Next / Related Videos -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme" parent="Theme.MaterialComponents.NoActionBar">
+    <style name="AppTheme" parent="Theme.Material3.Dark.NoActionBar">
         <item name="android:fontFamily">sans-serif</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:statusBarColor">#FF101010</item>
@@ -10,5 +10,15 @@
         <item name="colorPrimary">#FFFF0000</item>
         <item name="colorPrimaryDark">#FFCC0000</item>
         <item name="colorAccent">#FFFF0000</item>
+    </style>
+
+    <style name="RedButton" parent="Widget.Material3.Button">
+        <item name="backgroundTint">#FFFF0000</item>
+        <item name="android:textColor">#FFFFFFFF</item>
+    </style>
+
+    <style name="GrayButton" parent="Widget.Material3.Button">
+        <item name="backgroundTint">#FF444444</item>
+        <item name="android:textColor">#FFFFFFFF</item>
     </style>
 </resources>
