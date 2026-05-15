@@ -1,34 +1,31 @@
 package com.imran.ytplayer;
 
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
+import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.view.View;
+import android.view.WindowManager;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.OptIn;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.media3.common.MediaItem;
-import androidx.media3.common.Player;
-import androidx.media3.common.util.UnstableApi;
-import androidx.media3.datasource.DefaultHttpDataSource;
-import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.exoplayer.source.MediaSource;
-import androidx.media3.exoplayer.source.ProgressiveMediaSource;
-import androidx.media3.ui.PlayerView;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer;
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener;
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView;
 
 import java.util.List;
 
 public class PlayerActivity extends AppCompatActivity implements VideoAdapter.OnVideoClickListener {
 
-    private PlayerView playerView;
-    private ExoPlayer player;
+    private YouTubePlayerView youTubePlayerView;
     private TextView videoTitle, videoViews, videoDate, channelName, channelSubs, videoDescription;
     private ImageView channelAvatar;
     private RecyclerView relatedVideos;
@@ -38,6 +35,7 @@ public class PlayerActivity extends AppCompatActivity implements VideoAdapter.On
 
     private String currentVideoId;
     private VideoItem currentVideo;
+    private YouTubePlayer youTubePlayer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,8 +45,6 @@ public class PlayerActivity extends AppCompatActivity implements VideoAdapter.On
         youtubeService = new YouTubeService(this);
         prefsManager = new PrefsManager(this);
 
-        initViews();
-
         currentVideoId = getIntent().getStringExtra("video_id");
         if (currentVideoId == null) {
             Toast.makeText(this, "No video ID provided", Toast.LENGTH_SHORT).show();
@@ -56,7 +52,8 @@ public class PlayerActivity extends AppCompatActivity implements VideoAdapter.On
             return;
         }
 
-        // Set title from intent if available
+        initViews();
+
         String title = getIntent().getStringExtra("video_title");
         if (title != null) videoTitle.setText(title);
 
@@ -65,7 +62,7 @@ public class PlayerActivity extends AppCompatActivity implements VideoAdapter.On
     }
 
     private void initViews() {
-        playerView = findViewById(R.id.player_view);
+        youTubePlayerView = findViewById(R.id.youtube_player_view);
         videoTitle = findViewById(R.id.video_title);
         videoViews = findViewById(R.id.video_views);
         videoDate = findViewById(R.id.video_date);
@@ -75,48 +72,71 @@ public class PlayerActivity extends AppCompatActivity implements VideoAdapter.On
         channelAvatar = findViewById(R.id.channel_avatar);
         relatedVideos = findViewById(R.id.related_videos);
 
+        getLifecycle().addObserver(youTubePlayerView);
+
+        youTubePlayerView.addYouTubePlayerListener(new AbstractYouTubePlayerListener() {
+            @Override
+            public void onReady(@NonNull YouTubePlayer player) {
+                youTubePlayer = player;
+                player.loadVideo(currentVideoId, 0);
+            }
+        });
+
         relatedVideos.setLayoutManager(new LinearLayoutManager(this));
         relatedAdapter = new VideoAdapter(this);
         relatedVideos.setAdapter(relatedAdapter);
 
-        // Action buttons
         findViewById(R.id.btn_like).setOnClickListener(v -> Toast.makeText(this, "Liked!", Toast.LENGTH_SHORT).show());
         findViewById(R.id.btn_dislike).setOnClickListener(v -> Toast.makeText(this, "Disliked", Toast.LENGTH_SHORT).show());
-        findViewById(R.id.btn_share).setOnClickListener(v -> shareVideo());
         findViewById(R.id.btn_download).setOnClickListener(v -> Toast.makeText(this, "Download started", Toast.LENGTH_SHORT).show());
         findViewById(R.id.btn_subscribe).setOnClickListener(v -> Toast.makeText(this, "Subscribed!", Toast.LENGTH_SHORT).show());
+
+        // Fullscreen toggle
+        ImageButton btnFullscreen = findViewById(R.id.btn_fullscreen);
+        if (btnFullscreen != null) {
+            btnFullscreen.setOnClickListener(v -> toggleFullscreen());
+        }
     }
 
-    private void initPlayer(String videoId) {
-        if (player != null) {
-            player.release();
+    private boolean isFullscreen = false;
+
+    private void toggleFullscreen() {
+        if (isFullscreen) {
+            // Exit fullscreen
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            isFullscreen = false;
+        } else {
+            // Enter fullscreen (landscape)
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            isFullscreen = true;
         }
+    }
 
-        player = new ExoPlayer.Builder(this).build();
-        playerView.setPlayer(player);
-
-        // Use youtube.com/get_video_info or direct stream approach
-        // For a real app, you'd use a YouTube extraction library
-        // Here we use the YouTube embed URL approach
-        String youtubeUrl = "https://www.youtube.com/watch?v=" + videoId;
-
-        // Note: For actual playback, you need to extract the direct video URL
-        // This requires a library like youtube-dl or NewPipe extractor
-        // For now, we'll open in YouTube app as fallback
-        try {
-            DefaultHttpDataSource.Factory dataSourceFactory = new DefaultHttpDataSource.Factory();
-            MediaItem mediaItem = MediaItem.fromUri(Uri.parse(youtubeUrl));
-            player.setMediaItem(mediaItem);
-            player.prepare();
-            player.play();
-        } catch (Exception e) {
-            // Fallback: open in YouTube app
-            try {
-                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(youtubeUrl));
-                startActivity(intent);
-            } catch (Exception ex) {
-                Toast.makeText(this, "Cannot play video", Toast.LENGTH_SHORT).show();
-            }
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         }
     }
 
@@ -133,19 +153,12 @@ public class PlayerActivity extends AppCompatActivity implements VideoAdapter.On
                         videoViews.setText(formatViews(video.getViewCount()));
                         videoDate.setText(video.getPublishedAt());
                         channelSubs.setText("Subscribers");
-
-                        Glide.with(this)
-                                .load(video.getThumbnailUrl())
-                                .into(channelAvatar);
-
+                        Glide.with(PlayerActivity.this).load(video.getThumbnailUrl()).into(channelAvatar);
                         prefsManager.addToHistory(currentVideoId);
-                        initPlayer(currentVideoId);
                     });
                 }
             } catch (Exception e) {
-                runOnUiThread(() -> {
-                    initPlayer(currentVideoId);
-                });
+                // Silently fail
             }
         }).start();
     }
@@ -154,7 +167,9 @@ public class PlayerActivity extends AppCompatActivity implements VideoAdapter.On
         new Thread(() -> {
             try {
                 List<VideoItem> videos = youtubeService.searchVideos("related to " + currentVideoId, 10);
-                runOnUiThread(() -> relatedAdapter.setVideos(videos));
+                runOnUiThread(() -> {
+                    if (videos != null) relatedAdapter.setVideos(videos);
+                });
             } catch (Exception e) {
                 // Silently fail
             }
@@ -162,6 +177,7 @@ public class PlayerActivity extends AppCompatActivity implements VideoAdapter.On
     }
 
     private String formatViews(String viewCount) {
+        if (viewCount == null || viewCount.isEmpty()) return "";
         try {
             long views = Long.parseLong(viewCount);
             if (views >= 1_000_000) return String.format("%.1fM views", views / 1_000_000.0);
@@ -172,43 +188,22 @@ public class PlayerActivity extends AppCompatActivity implements VideoAdapter.On
         }
     }
 
-    private void shareVideo() {
-        if (currentVideo != null) {
-            Intent shareIntent = new Intent(Intent.ACTION_SEND);
-            shareIntent.setType("text/plain");
-            shareIntent.putExtra(Intent.EXTRA_TEXT, "https://youtube.com/watch?v=" + currentVideoId);
-            startActivity(Intent.createChooser(shareIntent, "Share video"));
-        }
-    }
-
     @Override
     public void onVideoClick(VideoItem video) {
         currentVideoId = video.getVideoId();
         currentVideo = video;
         videoTitle.setText(video.getTitle());
         channelName.setText(video.getChannelTitle());
-        initPlayer(currentVideoId);
+
+        if (youTubePlayer != null) {
+            youTubePlayer.loadVideo(currentVideoId, 0);
+        }
+
         loadVideoDetails();
     }
 
     @Override
     public void onVideoLongClick(VideoItem video) {
         onVideoClick(video);
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (player != null) {
-            player.release();
-        }
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        if (player != null) {
-            player.pause();
-        }
     }
 }

@@ -4,17 +4,16 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.EditText;
-import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
@@ -24,20 +23,17 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity implements VideoAdapter.OnVideoClickListener {
 
+    private static final int RC_SETTINGS = 2001;
+
     private ViewPager2 viewPager;
     private TabLayout tabLayout;
     private YouTubeService youtubeService;
     private PrefsManager prefsManager;
 
-    private List<VideoItem> trendingVideos = new ArrayList<>();
-    private List<VideoItem> subscriptionVideos = new ArrayList<>();
     private List<PlaylistItem> playlists = new ArrayList<>();
-    private List<VideoItem> libraryVideos = new ArrayList<>();
-
-    private VideoAdapter trendingAdapter;
-    private VideoAdapter subscriptionAdapter;
+    private List<VideoItem> subscriptionVideos = new ArrayList<>();
     private PlaylistAdapter playlistAdapter;
-    private VideoAdapter libraryAdapter;
+    private VideoAdapter subscriptionAdapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,7 +45,11 @@ public class MainActivity extends AppCompatActivity implements VideoAdapter.OnVi
 
         initViews();
         setupViewPager();
-        loadTrendingVideos();
+
+        // Check if already signed in and load data
+        if (prefsManager.isSignedIn()) {
+            loadUserPlaylists();
+        }
     }
 
     private void initViews() {
@@ -61,7 +61,7 @@ public class MainActivity extends AppCompatActivity implements VideoAdapter.OnVi
         FloatingActionButton fabAddUrl = findViewById(R.id.fab_add_url);
 
         btnSearch.setOnClickListener(v -> startActivity(new Intent(this, SearchActivity.class)));
-        btnSettings.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
+        btnSettings.setOnClickListener(v -> startActivityForResult(new Intent(this, SettingsActivity.class), RC_SETTINGS));
         fabAddUrl.setOnClickListener(v -> showUrlInputDialog());
     }
 
@@ -71,53 +71,41 @@ public class MainActivity extends AppCompatActivity implements VideoAdapter.OnVi
 
         new TabLayoutMediator(tabLayout, viewPager, (tab, position) -> {
             switch (position) {
-                case 0: tab.setText("Home"); break;
+                case 0: tab.setText("Playlists"); break;
                 case 1: tab.setText("Subscriptions"); break;
-                case 2: tab.setText("Playlists"); break;
-                case 3: tab.setText("Library"); break;
             }
         }).attach();
     }
 
-    private void loadTrendingVideos() {
-        new Thread(() -> {
-            try {
-                List<VideoItem> videos = youtubeService.getTrendingVideos(20);
-                runOnUiThread(() -> {
-                    trendingVideos.clear();
-                    trendingVideos.addAll(videos);
-                    if (trendingAdapter != null) {
-                        trendingAdapter.setVideos(trendingVideos);
-                    }
-                });
-            } catch (Exception e) {
-                runOnUiThread(() -> {
-                    Toast.makeText(this, "Error loading videos: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                });
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == RC_SETTINGS && resultCode == RESULT_OK && data != null) {
+            // User signed in, set up credential for YouTube API
+            String email = data.getStringExtra("account_email");
+            if (email != null) {
+                GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(this);
+                if (account != null) {
+                    youtubeService.setGoogleAccount(account);
+                }
             }
-        }).start();
-    }
-
-    public void refreshData() {
-        loadTrendingVideos();
-        if (prefsManager.isSignedIn()) {
             loadUserPlaylists();
         }
     }
 
     private void loadUserPlaylists() {
+        if (!prefsManager.isSignedIn()) return;
+
         new Thread(() -> {
             try {
                 List<PlaylistItem> items = youtubeService.getUserPlaylists(20);
                 runOnUiThread(() -> {
                     playlists.clear();
-                    playlists.addAll(items);
-                    if (playlistAdapter != null) {
-                        playlistAdapter.setPlaylists(playlists);
-                    }
+                    if (items != null) playlists.addAll(items);
+                    if (playlistAdapter != null) playlistAdapter.setPlaylists(playlists);
                 });
             } catch (Exception e) {
-                // Silently fail for playlists
+                // Silently fail
             }
         }).start();
     }
@@ -147,13 +135,11 @@ public class MainActivity extends AppCompatActivity implements VideoAdapter.OnVi
         String playlistId = YouTubeService.extractPlaylistId(url);
 
         if (playlistId != null) {
-            // Open playlist
             Intent intent = new Intent(this, PlaylistActivity.class);
             intent.putExtra("playlist_id", playlistId);
             intent.putExtra("playlist_title", "Playlist");
             startActivity(intent);
         } else if (videoId != null) {
-            // Play video
             Intent intent = new Intent(this, PlayerActivity.class);
             intent.putExtra("video_id", videoId);
             startActivity(intent);
@@ -174,7 +160,6 @@ public class MainActivity extends AppCompatActivity implements VideoAdapter.OnVi
 
     @Override
     public void onVideoLongClick(VideoItem video) {
-        // Show options dialog
         String[] options = {"Play", "Add to queue", "Share"};
         new AlertDialog.Builder(this)
                 .setTitle(video.getTitle())
@@ -195,21 +180,6 @@ public class MainActivity extends AppCompatActivity implements VideoAdapter.OnVi
         startActivity(Intent.createChooser(shareIntent, "Share video"));
     }
 
-    // Getters for adapters
-    public VideoAdapter getTrendingAdapter() {
-        if (trendingAdapter == null) {
-            trendingAdapter = new VideoAdapter(this);
-        }
-        return trendingAdapter;
-    }
-
-    public VideoAdapter getSubscriptionAdapter() {
-        if (subscriptionAdapter == null) {
-            subscriptionAdapter = new VideoAdapter(this);
-        }
-        return subscriptionAdapter;
-    }
-
     public PlaylistAdapter getPlaylistAdapter() {
         if (playlistAdapter == null) {
             playlistAdapter = new PlaylistAdapter(playlist -> {
@@ -222,15 +192,13 @@ public class MainActivity extends AppCompatActivity implements VideoAdapter.OnVi
         return playlistAdapter;
     }
 
-    public VideoAdapter getLibraryAdapter() {
-        if (libraryAdapter == null) {
-            libraryAdapter = new VideoAdapter(this);
+    public VideoAdapter getSubscriptionAdapter() {
+        if (subscriptionAdapter == null) {
+            subscriptionAdapter = new VideoAdapter(this);
         }
-        return libraryAdapter;
+        return subscriptionAdapter;
     }
 
-    public List<VideoItem> getTrendingVideos() { return trendingVideos; }
-    public List<VideoItem> getSubscriptionVideos() { return subscriptionVideos; }
     public List<PlaylistItem> getPlaylists() { return playlists; }
-    public List<VideoItem> getLibraryVideos() { return libraryVideos; }
+    public List<VideoItem> getSubscriptionVideos() { return subscriptionVideos; }
 }

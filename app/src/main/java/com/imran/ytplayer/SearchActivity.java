@@ -1,7 +1,7 @@
 package com.imran.ytplayer;
 
+import android.content.Intent;
 import android.os.Bundle;
-import android.view.KeyEvent;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -44,7 +44,14 @@ public class SearchActivity extends AppCompatActivity implements VideoAdapter.On
 
         youtubeService = new YouTubeService(this);
         prefsManager = new PrefsManager(this);
-        searchHistory = new HashSet<>(prefsManager.getHistory());
+
+        // Safely load search history
+        try {
+            Set<String> history = prefsManager.getHistory();
+            searchHistory = history != null ? new HashSet<>(history) : new HashSet<>();
+        } catch (Exception e) {
+            searchHistory = new HashSet<>();
+        }
 
         initViews();
         showSearchHistory();
@@ -65,7 +72,6 @@ public class SearchActivity extends AppCompatActivity implements VideoAdapter.On
         recyclerView.setAdapter(adapter);
 
         btnBack.setOnClickListener(v -> finish());
-
         btnSearch.setOnClickListener(v -> performSearch());
 
         searchInput.setOnEditorActionListener((v, actionId, event) -> {
@@ -78,23 +84,29 @@ public class SearchActivity extends AppCompatActivity implements VideoAdapter.On
     }
 
     private void showSearchHistory() {
-        historyChips.removeAllViews();
-        if (searchHistory.isEmpty()) {
-            historySection.setVisibility(View.GONE);
-            return;
-        }
+        try {
+            historyChips.removeAllViews();
+            if (searchHistory == null || searchHistory.isEmpty()) {
+                historySection.setVisibility(View.GONE);
+                return;
+            }
 
-        historySection.setVisibility(View.VISIBLE);
-        for (String query : searchHistory) {
-            Chip chip = new Chip(this);
-            chip.setText(query);
-            chip.setChipBackgroundColorResource(R.drawable.bg_chip);
-            chip.setTextColor(0xFFFFFFFF);
-            chip.setOnClickListener(v -> {
-                searchInput.setText(query);
-                performSearch();
-            });
-            historyChips.addView(chip);
+            historySection.setVisibility(View.VISIBLE);
+            for (String query : searchHistory) {
+                if (query == null || query.trim().isEmpty()) continue;
+                Chip chip = new Chip(this);
+                chip.setText(query);
+                chip.setChipBackgroundColorResource(R.drawable.bg_chip);
+                chip.setTextColor(0xFFFFFFFF);
+                chip.setOnClickListener(v -> {
+                    searchInput.setText(query);
+                    performSearch();
+                });
+                historyChips.addView(chip);
+            }
+        } catch (Exception e) {
+            // Prevent crash from bad history data
+            historySection.setVisibility(View.GONE);
         }
     }
 
@@ -103,10 +115,14 @@ public class SearchActivity extends AppCompatActivity implements VideoAdapter.On
         if (query.isEmpty()) return;
 
         // Hide keyboard
-        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-        imm.hideWindowFromInputMethod(searchInput.getWindowToken(), 0);
+        try {
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            imm.hideSoftInputFromWindow(searchInput.getWindowToken(), 0);
+        } catch (Exception e) {
+            // ignore
+        }
 
-        // Save to search history
+        if (searchHistory == null) searchHistory = new HashSet<>();
         searchHistory.add(query);
 
         progressBar.setVisibility(View.VISIBLE);
@@ -118,7 +134,7 @@ public class SearchActivity extends AppCompatActivity implements VideoAdapter.On
                 List<VideoItem> results = youtubeService.searchVideos(query, 20);
                 runOnUiThread(() -> {
                     progressBar.setVisibility(View.GONE);
-                    if (results.isEmpty()) {
+                    if (results == null || results.isEmpty()) {
                         emptyView.setVisibility(View.VISIBLE);
                         emptyView.setText("No results found");
                     } else {

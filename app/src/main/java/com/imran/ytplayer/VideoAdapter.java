@@ -76,7 +76,12 @@ public class VideoAdapter extends RecyclerView.Adapter<VideoAdapter.VideoViewHol
     private String formatMeta(VideoItem video) {
         StringBuilder sb = new StringBuilder();
         if (video.getViewCount() != null && !video.getViewCount().isEmpty()) {
-            sb.append(formatViews(Long.parseLong(video.getViewCount()))).append(" views");
+            try {
+                long views = Long.parseLong(video.getViewCount());
+                sb.append(formatViews(views)).append(" views");
+            } catch (NumberFormatException e) {
+                // ignore invalid view count
+            }
         }
         if (video.getPublishedAt() != null && !video.getPublishedAt().isEmpty()) {
             if (sb.length() > 0) sb.append(" • ");

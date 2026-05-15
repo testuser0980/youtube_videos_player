@@ -12,16 +12,14 @@ public class MainPagerAdapter extends FragmentStateAdapter {
     @Override
     public Fragment createFragment(int position) {
         switch (position) {
-            case 0: return VideoListFragment.newInstance(VideoListFragment.TYPE_TRENDING);
+            case 0: return new PlaylistFragment();
             case 1: return VideoListFragment.newInstance(VideoListFragment.TYPE_SUBSCRIPTIONS);
-            case 2: return new PlaylistFragment();
-            case 3: return VideoListFragment.newInstance(VideoListFragment.TYPE_LIBRARY);
-            default: return VideoListFragment.newInstance(VideoListFragment.TYPE_TRENDING);
+            default: return new PlaylistFragment();
         }
     }
 
     @Override
     public int getItemCount() {
-        return 4;
+        return 2;
     }
 }

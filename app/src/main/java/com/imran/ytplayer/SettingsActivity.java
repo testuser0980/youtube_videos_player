@@ -33,6 +33,7 @@ public class SettingsActivity extends AppCompatActivity {
 
     private PrefsManager prefsManager;
     private GoogleSignInClient googleSignInClient;
+    private GoogleSignInAccount signedInAccount;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,10 +42,10 @@ public class SettingsActivity extends AppCompatActivity {
 
         prefsManager = new PrefsManager(this);
 
-        // Configure Google Sign-In
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                 .requestEmail()
                 .requestProfile()
+                .requestServerAuthCode("831334231930-u15c9s5lofur26lap5iav5al1t8ik1gd.apps.googleusercontent.com")
                 .build();
         googleSignInClient = GoogleSignIn.getClient(this, gso);
 
@@ -66,7 +67,6 @@ public class SettingsActivity extends AppCompatActivity {
         qualityValue = findViewById(R.id.quality_value);
 
         btnBack.setOnClickListener(v -> finish());
-
         btnSignIn.setOnClickListener(v -> signIn());
         btnSignOut.setOnClickListener(v -> signOut());
 
@@ -100,8 +100,10 @@ public class SettingsActivity extends AppCompatActivity {
             prefsManager.setSignedIn(false);
             prefsManager.setUserName("");
             prefsManager.setUserEmail("");
+            signedInAccount = null;
             updateUI();
             Toast.makeText(this, "Signed out", Toast.LENGTH_SHORT).show();
+            setResult(RESULT_CANCELED);
         });
     }
 
@@ -118,17 +120,22 @@ public class SettingsActivity extends AppCompatActivity {
         try {
             GoogleSignInAccount account = completedTask.getResult(ApiException.class);
             if (account != null) {
+                signedInAccount = account;
                 prefsManager.setSignedIn(true);
                 prefsManager.setUserName(account.getDisplayName());
                 prefsManager.setUserEmail(account.getEmail());
                 updateUI();
                 Toast.makeText(this, "Signed in as " + account.getDisplayName(), Toast.LENGTH_SHORT).show();
 
-                // Refresh main activity data
-                setResult(RESULT_OK);
+                // Return the account info to MainActivity
+                Intent resultIntent = new Intent();
+                resultIntent.putExtra("account_email", account.getEmail());
+                resultIntent.putExtra("account_name", account.getDisplayName());
+                setResult(RESULT_OK, resultIntent);
             }
         } catch (ApiException e) {
             Toast.makeText(this, "Sign in failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            setResult(RESULT_CANCELED);
         }
     }
 
@@ -178,7 +185,7 @@ public class SettingsActivity extends AppCompatActivity {
     private void showAboutDialog() {
         new AlertDialog.Builder(this)
                 .setTitle("About YT Player")
-                .setMessage("YT Player v1.0\n\nA YouTube video player app built with Java.\n\nFeatures:\n- Watch single videos\n- Browse playlists\n- Search videos\n- Google Sign-In\n- Trending videos")
+                .setMessage("YT Player v1.0\n\nA YouTube video player app built with Java.")
                 .setPositiveButton("OK", null)
                 .show();
     }

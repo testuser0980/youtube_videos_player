@@ -6,21 +6,19 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <androidx.media3.ui.PlayerView
-        android:id="@+id/player_view"
+    <com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
+        android:id="@+id/youtube_player_view"
         android:layout_width="match_parent"
         android:layout_height="0dp"
+        app:enableAutomaticFullscreen="true"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintDimensionRatio="16:9"
-        app:use_controller="true"
-        app:show_timeout="3000"
-        app:controller_layout_id="@layout/custom_player_controls" />
+        app:layout_constraintDimensionRatio="16:9" />
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:background="#121212"
-        app:layout_constraintTop_toBottomOf="@id/player_view"
+        app:layout_constraintTop_toBottomOf="@id/youtube_player_view"
         app:layout_constraintBottom_toBottomOf="parent">
 
         <LinearLayout
@@ -125,33 +123,6 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
                         android:text="Dislike"
-                        android:textColor="#FFFFFF"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/btn_share"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:orientation="vertical"
-                    android:padding="8dp"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true">
-
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_share"
-                        app:tint="#FFFFFF" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="Share"
                         android:textColor="#FFFFFF"
                         android:textSize="12sp" />
                 </LinearLayout>

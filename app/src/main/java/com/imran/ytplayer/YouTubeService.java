@@ -11,11 +11,15 @@ import com.google.api.services.youtube.model.Playlist;
 import com.google.api.services.youtube.model.PlaylistListResponse;
 import com.google.api.services.youtube.model.SearchListResponse;
 import com.google.api.services.youtube.model.SearchResult;
+import com.google.api.services.youtube.model.Subscription;
+import com.google.api.services.youtube.model.SubscriptionListResponse;
 import com.google.api.services.youtube.model.Video;
 import com.google.api.services.youtube.model.VideoListResponse;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -36,20 +40,27 @@ public class YouTubeService {
                 .build();
     }
 
-    public void setCredential(GoogleAccountCredential credential) {
-        this.credential = credential;
+    public void setGoogleAccount(GoogleSignInAccount account) {
+        if (account == null) return;
+        // Create credential from the GoogleSignInAccount
+        credential = GoogleAccountCredential.usingOAuth2(
+                context,
+                Collections.singletonList("https://www.googleapis.com/auth/youtube.readonly")
+        );
+        credential.setSelectedAccount(account.getAccount());
+        // Build a new YouTube instance with the credential
         this.youtube = new YouTube.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential)
                 .setApplicationName(APP_NAME)
                 .build();
     }
 
     public List<VideoItem> searchVideos(String query, int maxResults) throws IOException {
-        YouTube.Search.List search = youtube.search().list("id,snippet");
+        YouTube.Search.List search = youtube.search().list(Collections.singletonList("id,snippet"));
         search.setKey(getApiKey());
         search.setQ(query);
-        search.setType("video");
+        search.setType(Collections.singletonList("video"));
         search.setMaxResults((long) maxResults);
-        search.setPart("snippet");
+        search.setPart(Collections.singletonList("snippet"));
 
         SearchListResponse response = search.execute();
         List<SearchResult> results = response.getItems();
@@ -78,12 +89,12 @@ public class YouTubeService {
     }
 
     public List<VideoItem> getTrendingVideos(int maxResults) throws IOException {
-        YouTube.Videos.List request = youtube.videos().list("id,snippet,contentDetails,statistics");
+        YouTube.Videos.List request = youtube.videos().list(Collections.singletonList("id,snippet,contentDetails,statistics"));
         request.setKey(getApiKey());
         request.setChart("mostPopular");
         request.setRegionCode("US");
         request.setMaxResults((long) maxResults);
-        request.setPart("snippet,contentDetails,statistics");
+        request.setPart(Arrays.asList("snippet", "contentDetails", "statistics"));
 
         VideoListResponse response = request.execute();
         List<Video> results = response.getItems();
@@ -116,11 +127,11 @@ public class YouTubeService {
     }
 
     public List<VideoItem> getPlaylistVideos(String playlistId, int maxResults) throws IOException {
-        YouTube.PlaylistItems.List request = youtube.playlistItems().list("id,snippet,contentDetails");
+        YouTube.PlaylistItems.List request = youtube.playlistItems().list(Collections.singletonList("id,snippet,contentDetails"));
         request.setKey(getApiKey());
         request.setPlaylistId(playlistId);
         request.setMaxResults((long) maxResults);
-        request.setPart("snippet,contentDetails");
+        request.setPart(Arrays.asList("snippet", "contentDetails"));
 
         com.google.api.services.youtube.model.PlaylistItemListResponse response = request.execute();
         List<com.google.api.services.youtube.model.PlaylistItem> results = response.getItems();
@@ -150,10 +161,10 @@ public class YouTubeService {
     public List<PlaylistItem> getUserPlaylists(int maxResults) throws IOException {
         if (credential == null) return new ArrayList<>();
 
-        YouTube.Playlists.List request = youtube.playlists().list("id,snippet,contentDetails");
+        YouTube.Playlists.List request = youtube.playlists().list(Collections.singletonList("id,snippet,contentDetails"));
         request.setMaxResults((long) maxResults);
         request.setMine(true);
-        request.setPart("snippet,contentDetails");
+        request.setPart(Arrays.asList("snippet", "contentDetails"));
 
         PlaylistListResponse response = request.execute();
         List<Playlist> results = response.getItems();
@@ -181,11 +192,108 @@ public class YouTubeService {
         return playlists;
     }
 
+    public List<VideoItem> getSubscriptionVideos(int maxResults) throws IOException {
+        if (credential == null) return new ArrayList<>();
+
+        // Step 1: Fetch the user's subscriptions (channels they're subscribed to)
+        YouTube.Subscriptions.List subRequest = youtube.subscriptions().list(Collections.singletonList("id,snippet"));
+        subRequest.setMine(true);
+        subRequest.setMaxResults(50L);
+        subRequest.setPart(Collections.singletonList("snippet"));
+
+        SubscriptionListResponse subResponse = subRequest.execute();
+        List<Subscription> subscriptions = subResponse.getItems();
+
+        if (subscriptions == null || subscriptions.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // Step 2: Collect channel IDs from subscriptions
+        List<String> channelIds = new ArrayList<>();
+        for (Subscription sub : subscriptions) {
+            if (sub.getSnippet() != null && sub.getSnippet().getResourceId() != null) {
+                String channelId = sub.getSnippet().getResourceId().getChannelId();
+                if (channelId != null) {
+                    channelIds.add(channelId);
+                }
+            }
+        }
+
+        if (channelIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // Step 3: For each channel, get their "uploads" playlist and fetch recent videos
+        List<VideoItem> allVideos = new ArrayList<>();
+        int videosPerChannel = Math.max(1, maxResults / Math.min(channelIds.size(), 10));
+        int channelsToFetch = Math.min(channelIds.size(), 10);
+
+        for (int i = 0; i < channelsToFetch && allVideos.size() < maxResults; i++) {
+            String channelId = channelIds.get(i);
+            try {
+                // Get the channel's uploads playlist
+                YouTube.Channels.List channelRequest = youtube.channels().list(Collections.singletonList("contentDetails"));
+                channelRequest.setId(Collections.singletonList(channelId));
+                channelRequest.setPart(Collections.singletonList("contentDetails"));
+                com.google.api.services.youtube.model.ChannelListResponse channelResponse = channelRequest.execute();
+
+                List<com.google.api.services.youtube.model.Channel> channels = channelResponse.getItems();
+                if (channels == null || channels.isEmpty()) continue;
+
+                com.google.api.services.youtube.model.Channel channel = channels.get(0);
+                if (channel.getContentDetails() == null ||
+                    channel.getContentDetails().getRelatedPlaylists() == null ||
+                    channel.getContentDetails().getRelatedPlaylists().getUploads() == null) {
+                    continue;
+                }
+
+                String uploadsPlaylistId = channel.getContentDetails().getRelatedPlaylists().getUploads();
+
+                // Fetch recent videos from the uploads playlist
+                YouTube.PlaylistItems.List playlistRequest = youtube.playlistItems().list(Collections.singletonList("id,snippet,contentDetails"));
+                playlistRequest.setPlaylistId(uploadsPlaylistId);
+                playlistRequest.setMaxResults((long) videosPerChannel);
+                playlistRequest.setPart(Arrays.asList("snippet", "contentDetails"));
+
+                com.google.api.services.youtube.model.PlaylistItemListResponse playlistResponse = playlistRequest.execute();
+                List<com.google.api.services.youtube.model.PlaylistItem> items = playlistResponse.getItems();
+
+                if (items != null) {
+                    for (com.google.api.services.youtube.model.PlaylistItem pi : items) {
+                        VideoItem item = new VideoItem();
+                        if (pi.getContentDetails() != null) {
+                            item.setVideoId(pi.getContentDetails().getVideoId());
+                        }
+                        if (pi.getSnippet() != null) {
+                            item.setTitle(pi.getSnippet().getTitle());
+                            item.setChannelTitle(pi.getSnippet().getChannelTitle());
+                            if (pi.getSnippet().getThumbnails() != null &&
+                                    pi.getSnippet().getThumbnails().getMedium() != null) {
+                                item.setThumbnailUrl(pi.getSnippet().getThumbnails().getMedium().getUrl());
+                            }
+                            item.setPublishedAt(pi.getSnippet().getPublishedAt().toString());
+                        }
+                        allVideos.add(item);
+                    }
+                }
+            } catch (Exception e) {
+                // Skip channels that fail
+                continue;
+            }
+        }
+
+        // Trim to maxResults
+        if (allVideos.size() > maxResults) {
+            return allVideos.subList(0, maxResults);
+        }
+        return allVideos;
+    }
+
     public VideoItem getVideoDetails(String videoId) throws IOException {
-        YouTube.Videos.List request = youtube.videos().list("id,snippet,contentDetails,statistics");
+        YouTube.Videos.List request = youtube.videos().list(Collections.singletonList("id,snippet,contentDetails,statistics"));
         request.setKey(getApiKey());
-        request.setId(videoId);
-        request.setPart("snippet,contentDetails,statistics");
+        request.setId(Collections.singletonList(videoId));
+        request.setPart(Arrays.asList("snippet", "contentDetails", "statistics"));
 
         VideoListResponse response = request.execute();
         List<Video> results = response.getItems();
@@ -222,14 +330,12 @@ public class YouTubeService {
 
     public static String extractVideoId(String url) {
         if (url == null) return null;
-        // Handle various YouTube URL formats
         String pattern = "(?<=watch\\?v=|/videos/|embed\\/|youtu.be\\/|\\/v\\/|\\/e\\/|watch\\?v%3D|watch\\?feature=player_embedded&v=|%2Fvideos%2F|embed%\\/|youtu.be%2F|%2Fv%2F)[^#\\&\\?\\n]*";
         java.util.regex.Pattern compiledPattern = java.util.regex.Pattern.compile(pattern);
         java.util.regex.Matcher matcher = compiledPattern.matcher(url);
         if (matcher.find()) {
             return matcher.group();
         }
-        // Simple fallback
         if (url.contains("v=")) {
             int start = url.indexOf("v=") + 2;
             int end = url.indexOf("&", start);
